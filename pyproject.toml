@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "solar-moe-vllm-plugin"
+version = "0.1.0"
+description = "vLLM out-of-tree plugin for SolarMoe"
+requires-python = ">=3.9"
+
+[project.entry-points."vllm.general_plugins"]
+solar_moe_plugin = "tmai_thai.vllm_setup:setup"
