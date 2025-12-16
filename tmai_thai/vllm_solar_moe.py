@@ -52,7 +52,7 @@ from vllm.model_executor.models.utils import (
 )
 
 # Local imports
-from .solar_moe import (
+from .solar_moe_updated import (
     SolarMoeForCausalLM,
     SolarMoeModel,
     SolarMoeConfig,
@@ -132,15 +132,20 @@ class SolarMoeVllm(nn.Module, SupportsLoRA, SupportsPP):
 
         # Convert and store configuration
         self.config = _convert_hf_config_to_solar(vllm_config.model_config.hf_config)
-        
-        # Initialize core model components
-        self.model = SolarMoeModel(self.config)
+
+        # IMPORTANT: Set attention implementation to use vLLM's PagedAttention
+        # This enables efficient KV cache management for batched inference
+        self.config._attn_implementation = "vllm"
+
+        # Get cache configuration from vLLM
+        cache_config = vllm_config.cache_config
+
+        # Initialize core model components with vLLM attention
+        self.model = SolarMoeModel(self.config, cache_config=cache_config)
         self.vocab_size = self.config.vocab_size
         self.lm_head = nn.Linear(self.config.hidden_size, self.config.vocab_size, bias=False)
-        
+
         # Use the model's embedding layer (required by VllmModel protocol)
-        # Wrap it in VocabParallelEmbedding for vLLM compatibility if needed
-        # For now, we'll use the model's embed_tokens directly
         self.embed_tokens = self.model.embed_tokens
 
         # Set vLLM compatibility attributes
@@ -309,7 +314,7 @@ class SolarMoeVllm(nn.Module, SupportsLoRA, SupportsPP):
 
     def load_weights(self, weights: Iterable[tuple[str, torch.Tensor]]) -> set[str]:
         """
-        Load model weights using vLLM's AutoWeightsLoader.
+        Load model weights with support for fused QKV projections.
 
         Args:
             weights: Iterable of (name, tensor) weight tuples
@@ -317,8 +322,61 @@ class SolarMoeVllm(nn.Module, SupportsLoRA, SupportsPP):
         Returns:
             Set of loaded weight names
         """
-        loader = AutoWeightsLoader(self)
-        return loader.load_weights(weights)
+        from vllm.model_executor.model_loader.weight_utils import default_weight_loader
+
+        # Mapping for stacked/fused parameters
+        stacked_params_mapping = [
+            # (param_name, shard_name, shard_id)
+            (".qkv_proj", ".q_proj", "q"),
+            (".qkv_proj", ".k_proj", "k"),
+            (".qkv_proj", ".v_proj", "v"),
+        ]
+
+        params_dict = dict(self.named_parameters())
+        loaded_params: set[str] = set()
+
+        for name, loaded_weight in weights:
+            # Skip rotary embedding cache tensors
+            if "rotary_emb.inv_freq" in name:
+                continue
+            if "rotary_emb.cos_cached" in name or "rotary_emb.sin_cached" in name:
+                continue
+
+            # Try to match stacked parameters (qkv_proj)
+            matched = False
+            for param_name, weight_name, shard_id in stacked_params_mapping:
+                if weight_name not in name:
+                    continue
+
+                # Replace weight_name with param_name in the parameter name
+                name = name.replace(weight_name, param_name)
+
+                # Skip if parameter doesn't exist (e.g., bias)
+                if name not in params_dict:
+                    matched = True
+                    break
+
+                param = params_dict[name]
+                weight_loader = param.weight_loader
+                weight_loader(param, loaded_weight, shard_id)
+                matched = True
+                break
+
+            if matched:
+                loaded_params.add(name)
+                continue
+
+            # Handle regular parameters (not stacked)
+            # Skip if parameter doesn't exist
+            if name not in params_dict:
+                continue
+
+            param = params_dict[name]
+            weight_loader = getattr(param, "weight_loader", default_weight_loader)
+            weight_loader(param, loaded_weight)
+            loaded_params.add(name)
+
+        return loaded_params
 
     def get_expert_mapping(self) -> List[Tuple[str, str, int, str]]:
         """

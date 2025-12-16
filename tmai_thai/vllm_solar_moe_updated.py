@@ -52,7 +52,7 @@ from vllm.model_executor.models.utils import (
 )
 
 # Local imports
-from .solar_moe import (
+from .solar_moe_updated import (
     SolarMoeForCausalLM,
     SolarMoeModel,
     SolarMoeConfig,

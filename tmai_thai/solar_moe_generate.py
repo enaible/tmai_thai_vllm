@@ -1,5 +1,5 @@
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from tmai_thai.solar_moe import SolarMoeForCausalLM
+from tmai_thai.solar_moe_updated import SolarMoeForCausalLM
 
 model = SolarMoeForCausalLM.from_pretrained("vessl/thai-tmai").to("cuda")
 tokenizer = AutoTokenizer.from_pretrained("vessl/thai-tmai")

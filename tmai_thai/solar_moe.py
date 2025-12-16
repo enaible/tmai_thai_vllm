@@ -57,7 +57,7 @@ try:
         from flash_attn import flash_attn_func, flash_attn_varlen_func
         from flash_attn.bert_padding import index_first_axis, pad_input, unpad_input  # noqa
         import inspect
-        
+
         _flash_supports_window_size = "window_size" in list(inspect.signature(flash_attn_func).parameters)
         _flash_attn_available = True
 except (ImportError, OSError, AttributeError) as e:
@@ -1206,7 +1206,7 @@ class SolarMoeModel(SolarMoePreTrainedModel):
                 hidden_states = (bskcn_1*bskcn_tv).to(hidden_states.device) + hidden_states*(1-bskcn_tv)
             if layer_idx in self.config.bskcn_4:
                 hidden_states = (bskcn_2*bskcn_tv).to(hidden_states.device) + hidden_states*(1-bskcn_tv)
-            
+
             if output_hidden_states:
                 all_hidden_states += (hidden_states,)
 

@@ -70,5 +70,5 @@ vllm serve vessl/thai-tmai --trust-remote-code --no-enable-prefix-caching --down
 
 Local Directory
 ```bash
-vllm serve /path/to/model --trust-remote-code --no-enable-prefix-caching
+vllm serve /root/nas/updated_final_model --trust-remote-code --no-enable-prefix-caching --enforce_eager --no-enable_chunked_prefill --convert="none"
 ```

@@ -28,7 +28,7 @@ logger = logging.get_logger(__name__)
 # Register the configuration with transformers
 try:
     from transformers import AutoConfig
-    AutoConfig.register("solar_moe", SolarMoeConfig)
+    AutoConfig.register("solar_moe_updated", SolarMoeConfig)
 except Exception:
     pass
 
